@@ -2,9 +2,9 @@ package powerglobe.presentation;
 
 import java.awt.Color;
 import java.awt.Dimension;
+import java.awt.Font;
 import java.awt.Insets;
 import java.awt.Rectangle;
-import java.awt.event.MouseEvent;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -24,8 +24,6 @@ import gov.nasa.worldwind.WorldWind;
 import gov.nasa.worldwind.animation.Animator;
 import gov.nasa.worldwind.avlist.AVKey;
 import gov.nasa.worldwind.awt.WorldWindowGLCanvas;
-import gov.nasa.worldwind.event.SelectEvent;
-import gov.nasa.worldwind.event.SelectListener;
 import gov.nasa.worldwind.geom.Angle;
 import gov.nasa.worldwind.geom.LatLon;
 import gov.nasa.worldwind.geom.Position;
@@ -35,6 +33,7 @@ import gov.nasa.worldwind.layers.ViewControlsLayer;
 import gov.nasa.worldwind.render.AnnotationAttributes;
 import gov.nasa.worldwind.render.GlobeAnnotation;
 import gov.nasa.worldwind.render.ScreenAnnotation;
+import gov.nasa.worldwind.render.ScreenRelativeAnnotation;
 import gov.nasa.worldwind.view.ViewElevationAnimator;
 import gov.nasa.worldwind.view.orbit.BasicOrbitView;
 import gov.nasa.worldwind.view.orbit.FlyToOrbitViewAnimator;
@@ -57,23 +56,17 @@ public class ViewScene {
 	
 	protected Shell shell; // окно SWT
 	
+	private AnnotationLayer namesLayer;
 	private AnnotationLayer annotationLayer;   //слой аннотаций
 	WorldWindowGLCanvas wwd;    // сцена WW
 	//protected ViewControlsLayer viewControlsLayer;
 	public List<Slide> slides;  // Список слайдов 
 	protected int index = 0;   // Номер текущего слайда
 	private AutoWatcher aw;     // Класс для автопросмотра
+	private ScreenRelativeAnnotation name;
 	private GlobeAnnotation ann;  // Аннотация текущего слайда  
-	
-	/**
-	 * Кнопки
-	 */
-	protected ScreenAnnotation left;
-	protected ScreenAnnotation right;
-	protected ScreenAnnotation play;
-	protected ScreenAnnotation stop;
-	protected ScreenAnnotation exit;
-	
+
+	ControlPanel cp;
 	
 	public ViewScene(){
 		
@@ -119,7 +112,13 @@ public class ViewScene {
 		shell.redraw();
 		shell.layout(true);
 		_embeddedContainer.layout(true);
-				
+		
+		/**
+		 * Добавляем слой с названием слайда
+		 */
+    	namesLayer = new AnnotationLayer();
+    	ApplicationTemplate.insertBeforePlacenames(wwd, namesLayer);
+		
 		/**
 		 * Добавляем слой аннотаций в WW
 		 */
@@ -179,7 +178,9 @@ public class ViewScene {
 				/**
 				 * рисуем кнопки управления
 				 */
-				setControls();
+				cp = new ControlPanel(ViewScene.this);
+				cp.setControls();
+				
 				/**
 				 * переводим камеру на первый слайд
 				 */
@@ -268,11 +269,8 @@ public class ViewScene {
      * @param slide
      */
     public void showSlide(Slide slide){
-    	/**
-    	 * Открываем аннотацию
-    	 */
-    	showAnnotation(slide);
     	
+    	hideAnnotation();
     	/**
     	 * Получаем настройки вида от сцены WW И останавливаем активные анимации переходов
     	 */
@@ -280,6 +278,7 @@ public class ViewScene {
     	view.getViewInputHandler().stopAnimators();
     	Position curCenter = view.getCenterPosition();
     	Angle dist = LatLon.greatCircleAzimuth(curCenter, slide.position);
+    	System.out.println(dist);
     	int time = (int)Math.round(Math.abs(1000*dist.degrees/slide.getMoveSpeed()));
         /**
          * Запускаем анимацию переход к позиции слайда с заданным временем
@@ -339,23 +338,73 @@ public class ViewScene {
         wwd.getView().firePropertyChange(AVKey.VIEW, null, wwd.getView());
     }
         
-    public void showAnnotation(Slide slide){
+    public void hideAnnotation(){
+		/**
+		 * Удаляем текущие аннотации
+		 */
     	if(ann!=null){
-    		/**
-    		 * Удаляем текущую аннотацию
-    		 */
-    		annotationLayer.removeAnnotation(ann);
     		ann.dispose();
     		ann=null;
     	}
+    	if(name!=null){
+    		name.dispose();
+    		name = null;
+    	}
+    	annotationLayer.removeAllAnnotations();
+    	namesLayer.removeAllAnnotations(); 
+    	wwd.redraw();
+    }
+    
+    /**
+     * Открывает аннотацию слайда и название
+     * @param slide
+     */   
+    public void showAnnotation(Slide slide){
+    	hideAnnotation();
+    	
     	if(slide.annotation!=null){
        		/**
     		 * Берем аннотацию текущего слайда и ставим на слой аннотаций
     		 */
     		ann = slide.annotation.getAnnotation(slide.position);
 			annotationLayer.addAnnotation(ann);
-    	}    	
+    	}   
+    	
+    	/**
+    	 * Ставим название слайда
+    	 */        
+    	name = createNameAnnotation(slide.getTitle());
+        namesLayer.addAnnotation(name); 
+        wwd.redraw();
     }
+    
+    /**
+     * Создает заголовок слайда
+     * @param title
+     * @return
+     */
+    protected ScreenRelativeAnnotation createNameAnnotation(String title){
+    
+    	AnnotationAttributes defaultAttributes = new AnnotationAttributes();
+        defaultAttributes.setBackgroundColor(new Color(0f, 0f, 0f, 0f));
+        defaultAttributes.setTextColor(Color.YELLOW);
+        defaultAttributes.setLeaderGapWidth(14);
+        defaultAttributes.setCornerRadius(0);
+        defaultAttributes.setSize(new Dimension(300, 0));
+        defaultAttributes.setAdjustWidthToText(AVKey.SIZE_FIT_TEXT); // use strict dimension width - 200
+        defaultAttributes.setFont(Font.decode("Arial-BOLD-28"));
+        defaultAttributes.setBorderWidth(0);
+        defaultAttributes.setHighlightScale(1);             // No highlighting either
+        defaultAttributes.setCornerRadius(0);
+        
+        ScreenRelativeAnnotation name = new ScreenRelativeAnnotation(title, 0.5, 0.9);
+        name.setKeepFullyVisible(true);
+        name.setXMargin(5);
+        name.setYMargin(5);
+        name.getAttributes().setDefaults(defaultAttributes);
+        return name;
+    }
+    
     
     
     /**
@@ -444,148 +493,13 @@ public class ViewScene {
     		aw = null;
     	}
     }
+	public Shell getShell() {
+		return shell;
+	}
+	public WorldWindowGLCanvas getWwd() {
+		return wwd;
+	}
     
-    /**
-     * Рисуем кнопки управления
-     */
-    public void setControls(){
-	    
-    	/**
-    	 * Берем размеры сцены WW
-    	 */
-    	Rectangle r = wwd.getBounds();
-    	/**
-    	 * Создаем слой для кнопок и добавляем в сцену
-    	 */
-    	AnnotationLayer l = new AnnotationLayer();
-    	ApplicationTemplate.insertBeforePlacenames(wwd, l);
-    	
-    	/**
-    	 * Базовые настройки отображения кнопки
-    	 */
-        AnnotationAttributes ca = new AnnotationAttributes();
-        ca.setAdjustWidthToText(AVKey.SIZE_FIXED);
-        ca.setInsets(new Insets(6, 6, 6, 6));   // отступы
-        ca.setBorderWidth(0);
-        ca.setCornerRadius(0);
-        ca.setSize(new Dimension(64, 64));   // размеры
-        ca.setBackgroundColor(new Color(0, 0, 0, 0));
-        ca.setImageOpacity(1);   // прозрачность
-        ca.setScale(1);     // Масштаб
-   	
-        /**
-         * Кнопка Предыдущий слайд
-         */
-    	left = new ScreenAnnotation("", new java.awt.Point(r.width/2-170, 30), ca);  //  ставить 170 px левее центра, 30px от низа
-    	left.setValue(AVKey.VIEW_OPERATION, AVKey.VIEW_PAN);
-    	left.getAttributes().setImageSource(this.getClass().getResource("/icons/a_left.png"));
-    	left.getAttributes().setSize(new Dimension(64, 64));
-     	l.addAnnotation(left);
-     	
-     	/**
-     	 * Кнопка Следующий слайд
-     	 */
-     	right = new ScreenAnnotation("", new java.awt.Point(r.width/2-100, 30), ca);  // 100px левее центра, 30px от низа
-     	right.setValue(AVKey.VIEW_OPERATION, AVKey.VIEW_PAN);
-     	right.getAttributes().setImageSource(this.getClass().getResource("/icons/a_right.png"));
-     	right.getAttributes().setSize(new Dimension(64, 64));
-     	l.addAnnotation(right);
-     	
-     	/**
-     	 * Кнопка Автопросмотр Старт
-     	 */
-        play = new ScreenAnnotation("", new java.awt.Point(r.width/2-30, 30), ca);  // 30px левее центра, 30px от низа
-        play.setValue(AVKey.VIEW_OPERATION, AVKey.VIEW_PAN);
-        play.getAttributes().setImageSource(this.getClass().getResource("/icons/a_play.png"));
-        play.getAttributes().setSize(new Dimension(64, 64));
-        l.addAnnotation(play);
-     	
-        /**
-         * Кнопка Автопросмотр Стоп
-         */
-     	stop = new ScreenAnnotation("", new java.awt.Point(r.width/2+40, 30), ca); // 40px Правее центра, 30px От низа
-     	stop.setValue(AVKey.VIEW_OPERATION, AVKey.VIEW_PAN);
-     	stop.getAttributes().setImageSource(this.getClass().getResource("/icons/a_stop.png"));
-     	stop.getAttributes().setSize(new Dimension(64, 64));
-     	l.addAnnotation(stop);
-     	
-     	/**
-     	 * Кнопка Выход
-     	 */
-     	exit = new ScreenAnnotation("", new java.awt.Point(r.width/2+110, 30), ca); // 110 Правее центра 30px от низа
-     	exit.setValue(AVKey.VIEW_OPERATION, AVKey.VIEW_PAN);
-     	exit.getAttributes().setImageSource(this.getClass().getResource("/icons/a_delete.png"));
-     	exit.getAttributes().setSize(new Dimension(64, 64));
-     	l.addAnnotation(exit);
-    	wwd.redraw();    	
-    	
-    	/**
-    	 * Ставим обработчик нажатия на кнопки
-    	 */
-    	wwd.addSelectListener(new SelectListener() {
-			
-			@Override
-			public void selected(SelectEvent event) {
-				MouseEvent me = event.getMouseEvent();
-				/**
-				 * Проверяем номер кнопки(1 - левая) и отсутствие модификаторов(нужно только первое событие)
-				 */
-				if(me==null || me.getButton()!=1 || me.getModifiersEx()==0)return;
-				/**
-				 * Какая кнопка нажата
-				 */
-				ScreenAnnotation selectedObject = (ScreenAnnotation) event.getTopObject();
-		        
-		        if(selectedObject==play){
-		        	// нажали запуск автопросмотра
-		        	shell.getDisplay().asyncExec(new Runnable() {
-						
-						@Override
-						public void run() {
-							startAuto();							
-						}
-					});
-		        }else if(selectedObject==left){
-		        	// нажали предыдущий слайд
-	        		shell.getDisplay().asyncExec(new Runnable() {
-						
-						@Override
-						public void run() {
-							prevSlide();							
-						}
-					});
-		        	
-		        }else if(selectedObject==right){
-		        	// нажали следующий слайд
-		        	shell.getDisplay().asyncExec(new Runnable() {
-						
-						@Override
-						public void run() {
-							nextSlide();							
-						}
-					});
-		        }else if(selectedObject==exit){
-		        	// нажали выход
-		        	shell.getDisplay().asyncExec(new Runnable() {
-						
-						@Override
-						public void run() {
-							finish();							
-						}
-					});
-		        }else if(selectedObject==stop){
-		        	// нажали стоп автопросмотра
-		        	shell.getDisplay().asyncExec(new Runnable() {
-						
-						@Override
-						public void run() {
-							stopAuto();							
-						}
-					});
-		        }
-		        me.consume();  // событие не обрабатывать дальше
-			}
-		});    	
-    }
+  
     
 }

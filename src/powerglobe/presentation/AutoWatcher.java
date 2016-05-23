@@ -21,6 +21,7 @@ public class AutoWatcher extends Thread{
 	 * Текущий слайд
 	 */
 	private int index;
+		
 	/**
 	 * До какого слайда крутить
 	 */
@@ -46,12 +47,12 @@ public class AutoWatcher extends Thread{
 				index+=step;
 				Slide prevSlide = slide; // сохраняем прошлый слайд
 				slide = vs.slides.get(index);  // берем текущий слайд
-				vs.showAnnotation(slide);
 				/**
 				 * Проверям включены ли пути у слайда 
 				 * В зависимости от направления перехода(вперед-назад) - у текущего или предыдущего
 				 */
 				if( (step>0 && slide.enablePath) || (step<0 && prevSlide.enablePath )){
+					vs.hideAnnotation();
 					if(step>0){
 						List<LatLon> coord = Workspace.getCurrent().currentProject.getPath(index);
 						pathAnimation(coord, slide);
@@ -64,6 +65,7 @@ public class AutoWatcher extends Thread{
 					vs.showSlide(slide);
 					waitAnimation();
 				}
+				vs.showAnnotation(slide);
 				/**
 				 * Ждем сколько прописано в слайде
 				 */

@@ -74,8 +74,19 @@ public class PathBuilder {
 				}
 				redrawPath();
 			}
-		});		
-				
+		});	
+		Workspace.getCurrent().addListener(Workspace.EVENT_CLEAR, new Consumer<Object>() {
+
+			@Override
+			public void accept(Object t) {
+				curSlide = null;
+				redrawPath();
+			}
+		});
+		
+		/**
+		 * Ставим обработчик клика на путь
+		 */
 		wwd.addSelectListener(new SelectListener() {
 			
 			@Override
