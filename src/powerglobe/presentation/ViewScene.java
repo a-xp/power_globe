@@ -278,7 +278,6 @@ public class ViewScene {
     	view.getViewInputHandler().stopAnimators();
     	Position curCenter = view.getCenterPosition();
     	Angle dist = LatLon.greatCircleAzimuth(curCenter, slide.position);
-    	System.out.println(dist);
     	int time = (int)Math.round(Math.abs(1000*dist.degrees/slide.getMoveSpeed()));
         /**
          * Запускаем анимацию переход к позиции слайда с заданным временем
