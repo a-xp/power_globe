@@ -114,7 +114,7 @@ public class Scene {
 		ws.addListener(Workspace.EVENT_SLIDE_SELECT, new Consumer<Object>() {
 			@Override
 			public void accept(Object t) {
-								goToSlide((Slide)t);
+				goToSlide((Slide)t);
 			}
 		});
 		/**
@@ -285,7 +285,9 @@ public class Scene {
 	 * @param slide
 	 */
 	public void goToSlide(Slide slide){
-		wwd.getView().goTo(slide.position, slide.position.elevation);	
+		if(!isCapturing){
+			wwd.getView().goTo(slide.position, slide.position.elevation);
+		}
 	}
 	
 	/**
@@ -296,6 +298,8 @@ public class Scene {
 		/**
 		 * Переводим на него камеру
 		 */
+		wwd.getView().stopAnimations();
+		wwd.getView().stopMovement();
 		wwd.getView().setEyePosition(slide.position);
 		/**
 		 * Слушаем события отрисовки

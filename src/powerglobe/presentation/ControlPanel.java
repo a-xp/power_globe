@@ -13,6 +13,7 @@ import gov.nasa.worldwind.awt.WorldWindowGLCanvas;
 import gov.nasa.worldwind.event.SelectEvent;
 import gov.nasa.worldwind.event.SelectListener;
 import gov.nasa.worldwind.layers.AnnotationLayer;
+import gov.nasa.worldwind.render.Annotation;
 import gov.nasa.worldwind.render.AnnotationAttributes;
 import gov.nasa.worldwind.render.ScreenAnnotation;
 import gov.nasa.worldwindx.examples.ApplicationTemplate;
@@ -99,7 +100,7 @@ public class ControlPanel {
      	stop.getAttributes().setImageSource(this.getClass().getResource("/icons/a_stop.png"));
      	stop.getAttributes().setSize(new Dimension(64, 64));
      	l.addAnnotation(stop);
-     	
+     	     	
      	/**
      	 * Кнопка Выход
      	 */
@@ -176,7 +177,49 @@ public class ControlPanel {
 		        }
 		        me.consume();  // событие не обрабатывать дальше
 			}
-		});    	
+		});   
+    	
+    	Thread animationCheck = new Thread(new Runnable() {			
+			@Override
+			public void run() {
+				while(!shell.isDisposed()){
+					if(wwd.getView().isAnimating()){
+						animationStarted();
+					}else{
+						animationStopped();
+					}
+					try {
+						Thread.sleep(100);
+					} catch (InterruptedException e) {
+						return;
+					}
+				}
+			}
+		});
+    	
+    	animationCheck.start();
     }
 
+    public void animationStarted(){
+    	hide(play);
+    	hide(left);
+    	hide(right);
+    	show(stop);
+    }
+    
+    public void animationStopped(){
+    	hide(stop);
+    	show(left);
+    	show(right);
+    	show(play);
+    }
+    
+    protected void show(Annotation ann){
+    	ann.setMinActiveAltitude(-1);
+    }
+    
+    protected void hide(Annotation ann){
+    	ann.setMinActiveAltitude(1e12);
+    }
+    
 }

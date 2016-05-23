@@ -3,6 +3,16 @@
 
 <product name="%product.name" uid="powerglobe.application" id="PowerGlobe.product1" application="PowerGlobe.application" version="1.0.0.qualifier" useFeatures="false" includeLaunchers="true">
 
+   <aboutInfo>
+      <image path="/PowerGlobeRCP/mini.png"/>
+      <text>
+         PowerGlobe - это программа создания презентаций на основе NASA WorldWind, которая позволяет пользователям создавать и проигрывать презентации, содержащие визуализацию географических данных. Такие презентации могут быть использованы в любой области, где требуется визуализация данных на поверхности Земли: прогноз погоды; виртуальные туры и экскурсии; мониторинг пробок на дорогах, загрязнения воздуха, уровня безработицы, лесных пожаров, вулканической активности, сейсмической активности или любых других показателей, которые зависят от местности. Основой для разработки PowerGlobe послужил проект NASA World Wind - 3D модель планеты Земля, разработанной NASA, предоставляющая открытый API, который позволяет разрабатывать дополнения для этого виртуального глобуса. Как и Microsoft PowerPoint, PowerGlobe поддерживает редактирование слайдов, переходов между ними и презентации в целом, а также добавление собственных пользовательских элементов, например, текст, фотографии, видео.
+
+
+PowerGlobe is a presentation program based on NASA WorldWind which allows users to create and run presentations with geographical data visualization. Such presentations can be used in any area where data visualization on the Earth surface is required: weather forecast; virtual sightseeing tours; monitoring traffic congestion, air pollution, unemployment level, forest fires, volcanic activity, seismic activity, or any other indicators, depending on the terrain. PowerGlobe is based on NASA World Wind — a 3D model of the planet Earth developed by NASA and at the same time a free, open-source API that allows to develop add-ons for this globe. Same as Microsoft PowerPoint, PowerGlobe allows editing slides, transitions between them and the presentation as a whole, as well as adding user’s own elements, such as text, photos, videos and other.
+      </text>
+   </aboutInfo>
+
    <configIni use="default">
    </configIni>
 
@@ -14,7 +24,8 @@
    <windowImages/>
 
    <splash
-      location="PowerGlobe" />
+      location="PowerGlobe"
+      startupProgressRect="5,275,445,15" />
    <launcher>
       <solaris/>
       <win useIco="false">
@@ -22,9 +33,19 @@
       </win>
    </launcher>
 
+
    <vm>
       <windows include="true">org.eclipse.jdt.launching.JRE_CONTAINER/org.eclipse.jdt.internal.debug.ui.launcher.StandardVMType/JavaSE-1.8</windows>
    </vm>
+
+   <license>
+        <text>
+   PowerGlobe - это программа создания презентаций на основе NASA WorldWind, которая позволяет пользователям создавать и проигрывать презентации, содержащие визуализацию географических данных. Такие презентации могут быть использованы в любой области, где требуется визуализация данных на поверхности Земли: прогноз погоды; виртуальные туры и экскурсии; мониторинг пробок на дорогах, загрязнения воздуха, уровня безработицы, лесных пожаров, вулканической активности, сейсмической активности или любых других показателей, которые зависят от местности. Основой для разработки PowerGlobe послужил проект NASA World Wind - 3D модель планеты Земля, разработанной NASA, предоставляющая открытый API, который позволяет разрабатывать дополнения для этого виртуального глобуса. Как и Microsoft PowerPoint, PowerGlobe поддерживает редактирование слайдов, переходов между ними и презентации в целом, а также добавление собственных пользовательских элементов, например, текст, фотографии, видео.
+
+
+PowerGlobe is a presentation program based on NASA WorldWind which allows users to create and run presentations with geographical data visualization. Such presentations can be used in any area where data visualization on the Earth surface is required: weather forecast; virtual sightseeing tours; monitoring traffic congestion, air pollution, unemployment level, forest fires, volcanic activity, seismic activity, or any other indicators, depending on the terrain. PowerGlobe is based on NASA World Wind — a 3D model of the planet Earth developed by NASA and at the same time a free, open-source API that allows to develop add-ons for this globe. Same as Microsoft PowerPoint, PowerGlobe allows editing slides, transitions between them and the presentation as a whole, as well as adding user’s own elements, such as text, photos, videos and other.
+         </text>
+   </license>
 
    <plugins>
       <plugin id="PowerGlobe"/>
