@@ -127,7 +127,6 @@ public class ControlPanel {
 				 * Какая кнопка нажата
 				 */
 				ScreenAnnotation selectedObject = (ScreenAnnotation) event.getTopObject();
-		        
 		        if(selectedObject==play){
 		        	// нажали запуск автопросмотра
 		        	shell.getDisplay().asyncExec(new Runnable() {
@@ -137,6 +136,7 @@ public class ControlPanel {
 							vs.startAuto();							
 						}
 					});
+		        	event.consume();
 		        }else if(selectedObject==left){
 		        	// нажали предыдущий слайд
 	        		shell.getDisplay().asyncExec(new Runnable() {
@@ -146,7 +146,7 @@ public class ControlPanel {
 							vs.prevSlide();							
 						}
 					});
-		        	
+		        	event.consume();
 		        }else if(selectedObject==right){
 		        	// нажали следующий слайд
 		        	shell.getDisplay().asyncExec(new Runnable() {
@@ -156,6 +156,7 @@ public class ControlPanel {
 							vs.nextSlide();							
 						}
 					});
+		        	event.consume();
 		        }else if(selectedObject==exit){
 		        	// нажали выход
 		        	shell.getDisplay().asyncExec(new Runnable() {
@@ -165,6 +166,7 @@ public class ControlPanel {
 							vs.finish();							
 						}
 					});
+		        	event.consume();
 		        }else if(selectedObject==stop){
 		        	// нажали стоп автопросмотра
 		        	shell.getDisplay().asyncExec(new Runnable() {
@@ -174,30 +176,10 @@ public class ControlPanel {
 							vs.stopAuto();							
 						}
 					});
+		        	event.consume();
 		        }
-		        me.consume();  // событие не обрабатывать дальше
 			}
 		});   
-    	
-    	Thread animationCheck = new Thread(new Runnable() {			
-			@Override
-			public void run() {
-				while(!shell.isDisposed()){
-					if(wwd.getView().isAnimating()){
-						animationStarted();
-					}else{
-						animationStopped();
-					}
-					try {
-						Thread.sleep(100);
-					} catch (InterruptedException e) {
-						return;
-					}
-				}
-			}
-		});
-    	
-    	animationCheck.start();
     }
 
     public void animationStarted(){

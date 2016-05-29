@@ -17,12 +17,14 @@ import org.eclipse.swt.events.ModifyEvent;
 import org.eclipse.swt.events.ModifyListener;
 import org.eclipse.swt.events.MouseEvent;
 import org.eclipse.swt.events.MouseListener;
+import org.eclipse.swt.layout.FillLayout;
 import org.eclipse.swt.layout.GridData;
 import org.eclipse.swt.layout.GridLayout;
 import org.eclipse.swt.layout.RowLayout;
 import org.eclipse.swt.widgets.Button;
 import org.eclipse.swt.widgets.Combo;
 import org.eclipse.swt.widgets.Composite;
+import org.eclipse.swt.widgets.Control;
 import org.eclipse.swt.widgets.Label;
 
 import gov.nasa.worldwind.geom.Angle;
@@ -58,9 +60,10 @@ public class SliderEdit {
 	
 	protected Composite parent;
 	protected Composite form;
-	StackLayout panelLayout;
 	Composite annotationPanel;
 	ScrolledComposite formScroll;	
+	
+	protected Map<String, AbstractAnnotationProp> curProps;
 	
 	/**
 	 * По-умолчанию выбран пустой слайд
@@ -71,14 +74,6 @@ public class SliderEdit {
 	 * Типы аннотаций
 	 */
 	protected List<Class<?>> annotationList;
-	/**
-	 * Поля ввода для каждого типа аннотации
-	 */
-	protected Map<Class<?>, Map<String, AbstractAnnotationProp>> annotationProps = new HashMap<>();
-	/**
-	 * Вкладки для каждого типа аннотации
-	 */
-	protected Map<Class<?>, Composite> annotationTabs = new HashMap<>();
 	
 	/**
 	 * Список основных полей слайда
@@ -86,13 +81,13 @@ public class SliderEdit {
 	protected Map<String, AbstractAnnotationProp> baseFields = new TreeMap<>();
 	{
 		baseFields.put(F_TITLE, new SingleLine("Slide title"));   // Название
-		baseFields.put(F_LAT, new DecimalValue("Latitude"));  //  Широта
-		baseFields.put(F_LON, new DecimalValue("Longitude"));  // Долгота
-		baseFields.put(F_ELEVATION, new DecimalValue("Elevation (m)")); // Высота
-		baseFields.put(F_DELAY, new IntegerValue("Delay (ms)"));  // Задержка
-		baseFields.put(F_MOVE, new DecimalValue("Fly speed (deg per s)")); // Скорость перемещения
-		baseFields.put(F_TURN, new DecimalValue("Turn speed (deg per s)")); // Скорость разворота
-		baseFields.put(F_PITCH, new DecimalValue("Pitch degree")); // Угол камеры
+		baseFields.put(F_LAT, new DecimalValue("Latitude", -90.0, 90.0));  //  Широта
+		baseFields.put(F_LON, new DecimalValue("Longitude", -180.0, 180.0));  // Долгота
+		baseFields.put(F_ELEVATION, new DecimalValue("Elevation (m)", 3e3, 50e6)); // Высота
+		baseFields.put(F_DELAY, new IntegerValue("Delay (ms)", 100, 10000));  // Задержка
+		baseFields.put(F_MOVE, new DecimalValue("Fly speed (deg per s)", 1.0, 30.0)); // Скорость перемещения
+		baseFields.put(F_TURN, new DecimalValue("Turn speed (deg per s)", 30.0, 720.0)); // Скорость разворота
+		baseFields.put(F_PITCH, new DecimalValue("Pitch degree", -70.0 ,70.0 )); // Угол камеры
 		baseFields.put(F_PATH, new BooleanValue("Enable path")); // включить пути
 	}
 		
@@ -177,49 +172,7 @@ public class SliderEdit {
 				 */
 				int index = annotationType.getSelectionIndex(); // номер в списке
 				Class<?> cls = annotationList.get(index);  // получаем тип аннотации (класс)
-				if(cls==null){
-					/**
-					 * Если выбран "Нет", скрываем панель настроек аннотации
-					 */
-					panelLayout.topControl = null;
-					annotationPanel.setSize(0, 0);					
-				}else{
-					/**
-					 * Выводим вкладку, которая ей соответсвует
-					 */
-					Composite tab = annotationTabs.get(cls);
-					panelLayout.topControl = tab;
-					tab.layout(true);
-					/**
-					 * Определяем какие выводить параметры для выбранной аннотации
-					 */
-					Map<String, String> params = null;
-					if(curSlide.getAnnotation()!=null && curSlide.getAnnotation().getClass()==cls){
-						/* если выбран тип аннотации как у редактируемого слайда - берем из слайда*/
-						params = curSlide.getAnnotation().getState();
-					}else{						
-						/* иначе берем параметры по-умолчанию для новой аннотации */
-						try {
-							AbstractAnnotation ann = (AbstractAnnotation) cls.newInstance(); // Создаем новую аннотацию этого типа
-							params = ann.getState();  // и берем ее параметры
-						} catch (InstantiationException | IllegalAccessException e1) {
-							e1.printStackTrace();
-						}
-					}
-					/**
-					 * Выставляем полученные параметры в форму
-					 * 
-					 * Проходим по всем полям ввода для данного типа аннотации
-					 */
-					for(Entry<String, AbstractAnnotationProp> entry: annotationProps.get(cls).entrySet()){
-						/**
-						 * Ставим в поле ввода значение из параметров
-						 */
-						entry.getValue().setValue(params.get(entry.getKey()));
-					}
-				}								
-				annotationPanel.layout(true);
-				form.layout(true);
+				showAnnotationTab(cls);
 			}
 		});
 		
@@ -232,38 +185,9 @@ public class SliderEdit {
 		annotationPanel = new Composite(form, SWT.NONE);
 		GridData annotationPanelData = new GridData(SWT.FILL, SWT.CENTER, true, false);
 		annotationPanel.setLayoutData(annotationPanelData);
-		panelLayout = new StackLayout();
-		annotationPanel.setLayout(panelLayout);
-		
-		/**
-		 * проходим по все аннотациям
-		 */
-		for(Class<?> cls: annotations.keySet()){
-			Map<String, AbstractAnnotationProp> props = null;
-			try {
-				/**
-				 * Забираем список полей у аннотации
-				 */
-				Method m = cls.getMethod("getControls");
-				props = (Map<String, AbstractAnnotationProp>)m.invoke(new Object[0]);
-			} catch (NoSuchMethodException | SecurityException | IllegalAccessException | IllegalArgumentException | InvocationTargetException e) {
-				e.printStackTrace();
-				continue;
-			}
-			if(props==null) continue;
-			/**
-			 * Создаем вкладку и ставим на нее поля аннотации
-			 */
-			Composite tab = new Composite(annotationPanel, SWT.NONE);
-			GridLayout tabLayout = new GridLayout(1, false);
-			tabLayout.verticalSpacing = 0;
-			tab.setLayout(tabLayout);
-			for(AbstractAnnotationProp prop: props.values()){
-				prop.createControls(tab);
-			}
-			annotationProps.put(cls, props);
-			annotationTabs.put(cls, tab);			
-		}
+		//panelLayout = new StackLayout();
+		//annotationPanel.setLayout(panelLayout);
+		annotationPanel.setLayout(new FillLayout());
 		
 		/**
 		 * Создаем кнопки сохранить и сбросить
@@ -354,6 +278,7 @@ public class SliderEdit {
 		 */
 		formScroll.layout(true);
 		form.layout(true);
+		annotationPanel.pack(true);
 		annotationPanel.layout(true);
 		formScroll.setMinHeight(form.computeSize(SWT.DEFAULT, SWT.DEFAULT).y);	
 	}
@@ -383,29 +308,8 @@ public class SliderEdit {
 		AbstractAnnotation ann = slide.getAnnotation();
 		int index = annotationList.indexOf(ann==null?null:ann.getClass());
 		annotationType.select(index);
-		if(ann==null){
-			panelLayout.topControl=null;
-		}else{
-			/**
-			 * Выводим вкладку редактирования для выбранного типа аннотации
-			 */
-			Class<?> cls = ann.getClass();
-			/**
-			 * Получаем значения свойств из слайда
-			 */
-			Map<String, String> params = slide.getAnnotation().getState();
-			/**
-			 * Выводим панель для текущего типа аннотации
-			 */
-			panelLayout.topControl = annotationTabs.get(cls);
-			/**
-			 * Проходим по всем полям для данного типа и ставим значение из параметров слайда
-			 */
-			for(Entry<String, AbstractAnnotationProp> entry: annotationProps.get(cls).entrySet()){
-				entry.getValue().setValue(params.get(entry.getKey()));
-			}
-		}
-		form.layout(true);
+
+		showAnnotationTab(ann==null?null:ann.getClass());
 	}
 	
 	/**
@@ -425,7 +329,7 @@ public class SliderEdit {
 		int index = annotationType.getSelectionIndex();
 		if(index>0){
 			Class<?> cls = annotationList.get(index);
-			for(AbstractAnnotationProp prop: annotationProps.get(cls).values()){
+			for(AbstractAnnotationProp prop: curProps.values()){
 				valid = valid && prop.validate();
 			}	
 		}
@@ -441,7 +345,7 @@ public class SliderEdit {
 		if(index>0){
 			Class<?> cls = annotationList.get(index);
 			Map<String, String> params = new HashMap<>();
-			for(Entry<String, AbstractAnnotationProp> entry: annotationProps.get(cls).entrySet()){
+			for(Entry<String, AbstractAnnotationProp> entry: curProps.entrySet()){
 				params.put(entry.getKey(), entry.getValue().getValue());
 			}			
 			try {
@@ -469,7 +373,68 @@ public class SliderEdit {
 			Workspace.getCurrent().currentProject.replace(curSlide, newSlide); // слайд уже существует (заполнен номер)
 		}
 	}
-		
+	
+	protected void showAnnotationTab(Class cls){
+		for(Control child : annotationPanel.getChildren()){
+			child.dispose();
+		}				
+		curProps = null;
+		if(cls!=null){
+			try {
+				/**
+				 * Забираем список полей у аннотации
+				 */
+				Method m = cls.getMethod("getControls");
+				curProps = (Map<String, AbstractAnnotationProp>)m.invoke(new Object[0]);
+			} catch (NoSuchMethodException | SecurityException | IllegalAccessException | IllegalArgumentException | InvocationTargetException e) {
+				e.printStackTrace();
+			}
+		}
+		if(curProps!=null){
+			/**
+			 * Создаем вкладку и ставим на нее поля аннотации
+			 */
+			Composite tab = new Composite(annotationPanel, SWT.NONE);
+			GridLayout tabLayout = new GridLayout(1, false);
+			tabLayout.verticalSpacing = 0;
+			tab.setLayout(tabLayout);
+			for(AbstractAnnotationProp prop: curProps.values()){
+				prop.createControls(tab);
+			}
+			
+			/**
+			 * Определяем какие выводить параметры для выбранной аннотации
+			 */
+			Map<String, String> params = null;
+			if(curSlide.getAnnotation()!=null && curSlide.getAnnotation().getClass()==cls){
+				/* если выбран тип аннотации как у редактируемого слайда - берем из слайда*/
+				params = curSlide.getAnnotation().getState();
+			}else{						
+				/* иначе берем параметры по-умолчанию для новой аннотации */
+				try {
+					AbstractAnnotation ann = (AbstractAnnotation) cls.newInstance(); // Создаем новую аннотацию этого типа
+					params = ann.getState();  // и берем ее параметры
+				} catch (InstantiationException | IllegalAccessException e1) {
+					e1.printStackTrace();
+				}
+			}
+			/**
+			 * Выставляем полученные параметры в форму
+			 * 
+			 * Проходим по всем полям ввода для данного типа аннотации
+			 */
+			for(Entry<String, AbstractAnnotationProp> entry: curProps.entrySet()){
+				/**
+				 * Ставим в поле ввода значение из параметров
+				 */
+				entry.getValue().setValue(params.get(entry.getKey()));
+			}				
+		}	
+		formScroll.setMinHeight(form.computeSize(SWT.DEFAULT, SWT.DEFAULT, true).y);
+		annotationPanel.layout(true);
+		form.layout(true);
+	}
+			
 	public SliderEdit(Composite parent){
 		this.parent = parent;
 	}

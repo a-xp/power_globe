@@ -31,6 +31,9 @@ public class AutoWatcher extends Thread{
 	 */
 	private ViewScene vs;
 	
+	/**
+	 * «апускает поток автоуправлени€ анимацией
+	 */
 	@Override
 	public void run() {
 		/**
@@ -43,6 +46,9 @@ public class AutoWatcher extends Thread{
 			vs.showFirstSlide(index);
 			sleep(slide.getDelay());
 			
+			/**
+			 * ѕроходим по слайдам от начальной позиции до конечной
+			 */
 			while(index!=toIndex){	
 				index+=step;
 				Slide prevSlide = slide; // сохран€ем прошлый слайд
@@ -52,7 +58,7 @@ public class AutoWatcher extends Thread{
 				 * ¬ зависимости от направлени€ перехода(вперед-назад) - у текущего или предыдущего
 				 */
 				if( (step>0 && slide.enablePath) || (step<0 && prevSlide.enablePath )){
-					vs.hideAnnotation();
+					//vs.hideAnnotation();
 					if(step>0){
 						List<LatLon> coord = Workspace.getCurrent().currentProject.getPath(index);
 						pathAnimation(coord, slide);
@@ -62,6 +68,10 @@ public class AutoWatcher extends Thread{
 						pathAnimation(coord, prevSlide);
 					}
 				}else{
+					/**
+					 * ≈сли нет путей, то стандартна€ анимаци€
+					 */
+			    	vs.hideAnnotation();
 					vs.showSlide(slide);
 					waitAnimation();
 				}
@@ -70,56 +80,105 @@ public class AutoWatcher extends Thread{
 				 * ∆дем сколько прописано в слайде
 				 */
 				sleep(slide.getDelay());
-			}	
+			}
+			vs.showSlide(vs.slides.get(index));
+			waitAnimation();
 			vs.stopAuto();	
 		} catch (InterruptedException e) {
 			return;
 		}
 	}
 
+	/**
+	 * ∆дем окончани€ анимации сцены
+	 * @throws InterruptedException
+	 */
 	protected void waitAnimation() throws InterruptedException{
 		while(vs.isAnimating()){
 			sleep(200);
 		}
 	}
 	
+	/**
+	 * јнимаци€ прохождени€ пути
+	 * @param coords
+	 * @param slide
+	 * @throws InterruptedException
+	 */
     protected void pathAnimation(List<LatLon> coords, Slide slide) throws InterruptedException{
     	if(coords.size()==0)return;    	
 		LatLon last = coords.get(0);		
-		//Position curEye = vs.wwd.getView().getCurrentEyePosition();
-    	for(LatLon latlon: coords.subList(1, coords.size())){    		
+		/**
+		 * ѕроходим по всем точкам и запускаем дл€ каждой анимацию перехода
+		 */
+		for(LatLon latlon: coords.subList(1, coords.size())){    		
 			goToPosition(last, latlon, slide.getCameraPitch(), slide.getMoveSpeed(), slide.getTurnSpeed(), slide.getPosition().elevation);
-			waitAnimation();
 			last = latlon;
 		}
     }
     
     /**
-     * јнимаци€ перехода по пути
+     * јнимаци€ перехода к точке пути
      * @param from
      * @param to
      */
-    protected void goToPosition(LatLon from, LatLon to, double pitch, double moveSpeed, double turnSpeed, double elevation)
+    protected void goToPosition(LatLon from, LatLon to, double cameraPitch, double moveSpeed, double turnSpeed, double elevation)
     throws InterruptedException{
+    	/**
+    	 * ≈сли уже в точке, то выходим
+    	 */
     	if(LatLon.greatCircleDistance(from, to).degrees<0.1){
     		return;
     	}    	
     	BasicOrbitView view = (BasicOrbitView) vs.wwd.getView();
         view.getViewInputHandler().stopAnimators();
+
         /**
-         * «апускаем анимацию переход к позиции слайда с заданным временем 
+         * “екущие параметры 3ƒ вида
          */
-        Angle curHeading = view.getHeading();        
+        Angle pitch = Angle.fromDegrees(cameraPitch);
         Angle heading = LatLon.greatCircleAzimuth(from, to);
-        int turnTime = (int) Math.round(1000/turnSpeed*heading.angularDistanceTo(curHeading).degrees);
-        int flyTime = (int) Math.round(1000/moveSpeed*LatLon.greatCircleDistance(from, to).degrees);
-        if(turnTime>0){
-        	vs.addPathAnimator(new Position(from, 0), heading, Angle.fromDegrees(pitch), elevation, turnTime, true);
+        Angle curHeading = view.getHeading();
+        Angle curPitch = view.getPitch();
+        Double curZoom = view.getZoom();
+        
+        /**
+         * ¬ысчитываем врем€ установки камеры на нужное отклонение и высоту
+         */
+        int setTime = Math.max((int)Math.round(100*curPitch.angularDistanceTo(pitch).degrees),
+        		(int)Math.round(Math.abs(Math.log10(curZoom)-Math.log10(elevation)))*100);
+        if(setTime>0){
+        	/**
+        	 * «апускаем анимацию - фаза 1 (переход на высоту и наклон камеры)
+        	 */
+        	vs.addPathAnimator(from, curHeading, pitch, elevation, setTime);
+        	waitAnimation();
         }
-    	waitAnimation(); 
+        
+        /**
+         * ¬ысчитываем врем€ поворота в сторону следующей точки
+         */
+        int turnTime = (int)Math.round(1000/turnSpeed*curHeading.angularDistanceTo(heading).degrees);
+        if(turnTime>0){
+        	/**
+        	 * «апускаем анимацию - фаза 2 (поворот в сторону следующей точки)
+        	 */
+        	vs.addPathAnimator(from, heading, pitch, elevation, turnTime);
+        	waitAnimation();
+        }   
+        
+        /**
+         * ¬ысчитываем врем€ перехода к следующей точке
+         */
+        int flyTime = (int) Math.round(1000/moveSpeed*LatLon.greatCircleDistance(from, to).degrees);
     	if(flyTime>0){
-    		vs.addPathAnimator(new Position(to, 0), heading, Angle.fromDegrees(pitch), elevation, flyTime, true);
-    	}
+    		/**
+    		 * «апускаем анимацию - фаза 3 (переход на следующую точку пути)
+    		 * 
+    		 */
+    		vs.addPathAnimator(to, heading, pitch, elevation, flyTime);
+    		waitAnimation();
+        }
 	}
 	
 	public AutoWatcher(ViewScene vs) {
@@ -140,5 +199,6 @@ public class AutoWatcher extends Thread{
 	public int getIndex(){
 		return index;
 	}
+	
 		
 }

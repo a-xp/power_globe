@@ -1,5 +1,6 @@
 package powerglobe.path;
 
+import java.awt.Dimension;
 import java.awt.Point;
 import java.util.ArrayList;
 import java.util.List;
@@ -15,6 +16,7 @@ import gov.nasa.worldwind.event.SelectListener;
 import gov.nasa.worldwind.geom.Angle;
 import gov.nasa.worldwind.geom.LatLon;
 import gov.nasa.worldwind.geom.Position;
+import gov.nasa.worldwind.geom.Vec4;
 import gov.nasa.worldwind.layers.RenderableLayer;
 import gov.nasa.worldwind.render.BasicShapeAttributes;
 import gov.nasa.worldwind.render.Material;
@@ -33,7 +35,7 @@ import powerglobe.project.Workspace;
  */
 public class PathBuilder {
 	
-	final double POINT_SELECT_RADIUS = 0.1;
+	final int POINT_SELECT_RADIUS = 30;
 	protected BasicDragger dragger;
 	RenderableLayer layer = new RenderableLayer();
 	WorldWindowGLCanvas wwd;
@@ -41,7 +43,7 @@ public class PathBuilder {
 	
 	public void init(WorldWindowGLCanvas wwd){
 		dragger = new BasicDragger(wwd, true);
-		this.wwd= wwd;	
+		this.wwd= wwd;
 		
 		ApplicationTemplate.insertAfterPlacenames(wwd, layer);
 		
@@ -128,7 +130,7 @@ public class PathBuilder {
 			if(coord!=null){
 		        ShapeAttributes attrs = new BasicShapeAttributes();
 		        attrs.setOutlineMaterial(Material.RED);
-		        attrs.setOutlineWidth(2d);
+		        attrs.setOutlineWidth(5d);
 		        
 		        List<Position> positions = coord.stream().map(latlon -> new Position(latlon, 0)).collect(Collectors.toList());
 		        Path path = new Path(positions);
@@ -138,6 +140,10 @@ public class PathBuilder {
 		        path.setFollowTerrain(true);
 		        path.setAltitudeMode(WorldWind.CLAMP_TO_GROUND);
 		        path.setPathType(AVKey.GREAT_CIRCLE);
+		        path.setExtrude(true);
+		        path.setShowPositions(true);
+		        path.setShowPositionsThreshold(1e9);
+		        path.setShowPositionsScale(4);
 		        layer.addRenderable(path);	        			        
 			}	
 		}
@@ -152,9 +158,8 @@ public class PathBuilder {
 	protected void removePoint(Path path, Point point){
 		List<Position> positions = new ArrayList<>(); 
 		path.getPositions().forEach(positions::add);
-		Position pos = pointToPosition(point);
 		
-		int pointClicked = findPathPoint(positions, pos);
+		int pointClicked = findPathPoint(positions, point);
 		if(positions.size()>2 && pointClicked!=-1){
 			positions.remove(pointClicked);
 		}
@@ -173,9 +178,10 @@ public class PathBuilder {
 		path.getPositions().forEach(positions::add);
 		Position startPosition = pointToPosition(start);
 		Position stopPosition = pointToPosition(stop);
-
-		int pointClicked = findPathPoint(positions, startPosition);
 		
+		if(startPosition==null || stopPosition==null)return;
+		
+		int pointClicked = findPathPoint(positions, start);	
 		
 		if(pointClicked==-1){
 		/**
@@ -206,17 +212,27 @@ public class PathBuilder {
 	    return wwd.getView().computePositionFromScreenPoint(point.x, point.y);
 	}
 	
+	protected Point positionToPoint(Position position){
+		Vec4 vec = wwd.getView().getGlobe().computePointFromPosition(position);
+		Vec4 screenVec = wwd.getView().project(vec);
+		Dimension dim = wwd.getSize();
+		return new Point((int)Math.round(screenVec.x), (int)Math.round(dim.height-screenVec.y));
+	}
+	
 	/**
 	 * Определяем по какой кнопке был клик
 	 * @param positions
 	 * @param pos
 	 * @return
 	 */
-	protected int findPathPoint(List<Position> positions, Position pos){
+	protected int findPathPoint(List<Position> positions, Point point){
+		Position click = pointToPosition(point);
 		Position closest = positions.stream().sorted((pos1, pos2)->Double.compare(
-				Position.linearDistance(pos1, pos).degrees,
-				Position.linearDistance(pos2, pos).degrees)).findFirst().get();
-		if(Position.linearDistance(closest, pos).degrees>POINT_SELECT_RADIUS){
+				Position.linearDistance(pos1, click).degrees,
+				Position.linearDistance(pos2, click).degrees)).findFirst().get();
+		Point pathPoint = positionToPoint(closest);
+		double dist = point.distance(pathPoint);
+		if(dist>POINT_SELECT_RADIUS){
 			return -1;
 		}else{
 			return positions.indexOf(closest);
@@ -246,7 +262,5 @@ public class PathBuilder {
 		
 		return -1;
 	}
-   
-	
    
 }

@@ -64,7 +64,6 @@ public class Project {
 		slides.remove(k);  // удал€ем его из списка
 		newSlide.index = k;  // ставим индекс у нового слайда 
 		slides.add(k, newSlide);  // ƒобавл€ем новый слайд на место старого
-		paths.remove(k);
 		// запускаем событие —лайд удален со старым слайдом 
 		Workspace.getCurrent().fireEvent(Workspace.EVENT_SLIDE_REMOVE, oldSlide);
 		// запускаем событие —лайд добавлен с новым слайдов
@@ -86,7 +85,6 @@ public class Project {
 		 * ќбновл€ем номера всех слайдов
 		 */
 		updateIndexes();
-		paths.clear();
 		/**
 		 * «апускаем событие слайд перемещен
 		 */

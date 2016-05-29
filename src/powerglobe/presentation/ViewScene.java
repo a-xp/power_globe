@@ -5,6 +5,9 @@ import java.awt.Dimension;
 import java.awt.Font;
 import java.awt.Insets;
 import java.awt.Rectangle;
+import java.awt.event.MouseEvent;
+import java.awt.event.MouseListener;
+import java.awt.event.MouseMotionListener;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -21,7 +24,11 @@ import org.eclipse.ui.PlatformUI;
 
 import gov.nasa.worldwind.BasicModel;
 import gov.nasa.worldwind.WorldWind;
+import gov.nasa.worldwind.animation.AngleAnimator;
 import gov.nasa.worldwind.animation.Animator;
+import gov.nasa.worldwind.animation.DoubleAnimator;
+import gov.nasa.worldwind.animation.PositionAnimator;
+import gov.nasa.worldwind.animation.ScheduledInterpolator;
 import gov.nasa.worldwind.avlist.AVKey;
 import gov.nasa.worldwind.awt.WorldWindowGLCanvas;
 import gov.nasa.worldwind.geom.Angle;
@@ -35,6 +42,8 @@ import gov.nasa.worldwind.render.GlobeAnnotation;
 import gov.nasa.worldwind.render.ScreenAnnotation;
 import gov.nasa.worldwind.render.ScreenRelativeAnnotation;
 import gov.nasa.worldwind.view.ViewElevationAnimator;
+import gov.nasa.worldwind.view.ViewPropertyAccessor;
+import gov.nasa.worldwind.view.firstperson.FlyToFlyViewAnimator.OnSurfacePositionAnimator;
 import gov.nasa.worldwind.view.orbit.BasicOrbitView;
 import gov.nasa.worldwind.view.orbit.FlyToOrbitViewAnimator;
 import gov.nasa.worldwind.view.orbit.OrbitView;
@@ -153,6 +162,37 @@ public class ViewScene {
 		ls.apply(wwd);
 		
 		/**
+		 * Отключаем дефолтные обработчики кликов
+		 */
+		wwd.getInputHandler().addMouseListener(new MouseListener() {
+			
+			@Override
+			public void mouseReleased(MouseEvent e) {
+				e.consume();
+			}
+			
+			@Override
+			public void mousePressed(MouseEvent e) {
+				e.consume();				
+			}
+			
+			@Override
+			public void mouseExited(MouseEvent e) {
+				e.consume();				
+			}
+			
+			@Override
+			public void mouseEntered(MouseEvent e) {
+				e.consume();				
+			}
+			
+			@Override
+			public void mouseClicked(MouseEvent e) {
+				e.consume();				
+			}
+		});
+		
+		/**
 		 * Ждем окончания инициализации окна WW - момент когда начнут приходить события об отрисовках
 		 */
 		wwd.addGLEventListener(new GLEventListener() {			
@@ -262,30 +302,40 @@ public class ViewScene {
     	view.setEyePosition(slide.position);
     	view.getViewInputHandler().stopAnimators();
     	wwd.redraw();
-    }    
+     }    
     
     /**
      * Переход к слайду без следования пути
      * @param slide
      */
     public void showSlide(Slide slide){
-    	
-    	hideAnnotation();
     	/**
     	 * Получаем настройки вида от сцены WW И останавливаем активные анимации переходов
     	 */
     	BasicOrbitView view = (BasicOrbitView) wwd.getView();
     	view.getViewInputHandler().stopAnimators();
     	Position curCenter = view.getCenterPosition();
-    	Angle dist = LatLon.greatCircleAzimuth(curCenter, slide.position);
-    	int time = (int)Math.round(Math.abs(1000*dist.degrees/slide.getMoveSpeed()));
+    	Angle dist = LatLon.greatCircleDistance(curCenter, slide.position);
+    	/**
+    	 * Сколько времени нужна для перемещения камеры
+    	 */
+    	int moveTime = (int)Math.round(Math.abs(1000*dist.degrees/slide.getMoveSpeed()));
+    	/**
+    	 * Сколько времени нужно для поворота камеры
+    	 */
+    	int turnTime = (int)Math.round(1000/slide.getTurnSpeed()*Math.max(
+    			Angle.ZERO.angularDistanceTo(view.getPitch()).degrees,
+    			Angle.ZERO.angularDistanceTo(view.getHeading()).degrees));
         /**
-         * Запускаем анимацию переход к позиции слайда с заданным временем
+         * Запускаем анимацию переход к позиции слайда с заданным временем -
+         * максимум времени поворота и перемещения
          * Восстанавливаем стандартный вид на шар 
-         */
-    	if(time<50)time=50;
-    	view.addPanToAnimator(slide.position, Angle.ZERO, Angle.ZERO, slide.position.elevation, time, true);
-    }
+         */    	
+    	int time = Math.max(turnTime, moveTime);
+    	if(time>0){
+    		view.addPanToAnimator(slide.position, Angle.ZERO, Angle.ZERO, slide.position.elevation, time, true);
+    	}
+	}
     
     /**
      * Включает анимацию перехода без изменения высоты
@@ -297,45 +347,66 @@ public class ViewScene {
      * @param timeToMove
      * @param endCenterOnSurface
      */
-    public void addPathAnimator(Position endCenterPos, Angle endHeading,
-             Angle endPitch, double endZoom, long timeToMove, boolean endCenterOnSurface){
-    	int altitudeMode = endCenterOnSurface ? WorldWind.CLAMP_TO_GROUND : WorldWind.ABSOLUTE;
+    public void addPathAnimator(LatLon endCenter, Angle endHeading,
+             Angle endPitch, double endZoom, long timeToMove){
+    	int altitudeMode = WorldWind.CLAMP_TO_GROUND;
     	OrbitView orbitView = (OrbitView) wwd.getView();
+    	
+    	double elevation = 1e14;
     	/**
-    	 * Получаем текущие натройки вида
+    	 * Получаем текущие настройки вида
+    	 * elevation - получено опытным путем
+    	 * (если ставить меньше прыгает анимация, хотя оно и не должно влиять) 
     	 */
-    	Position beginCenterPos = orbitView.getCenterPosition();
+    	Position endCenterPos = new Position(endCenter, elevation);
+    	Position beginCenterPos = new Position(orbitView.getCenterPosition(), elevation);
     	Angle beginHeading = orbitView.getHeading();
-    	Angle beginPitch = orbitView.getPitch();
-    	double beginZoom = orbitView.getZoom();    	
+    	Angle beginPitch = orbitView.getPitch(); 	
+    	Double beginZoom = orbitView.getZoom();
+
     	/**
-    	 * Создаем стандартный аниматор перехода от точки к точке
+    	 * Аниматор перемещения камеры
     	 */
-        FlyToOrbitViewAnimator panAnimator = FlyToOrbitViewAnimator.createFlyToOrbitViewAnimator(orbitView,
-            beginCenterPos, endCenterPos, beginHeading, endHeading, beginPitch, endPitch,
-            beginZoom, endZoom, timeToMove, altitudeMode);
-        /**
-         * Отфильтровываем ненужную анимацию высоты
-         */
-        List<Animator> list = new ArrayList<>();
-        panAnimator.getAnimators().forEach(list::add);
-        Animator[] filtered = list.stream().map(an -> {
-        	if(an instanceof ViewElevationAnimator){
-        		return new ViewElevationAnimator(null,
-                        beginZoom, endZoom, beginCenterPos, endCenterPos, WorldWind.ABSOLUTE,
-                        OrbitViewPropertyAccessor.createZoomAccessor(orbitView));
-        	}else{
-        		return an;	
-        	}
-        }).toArray(Animator[]::new);        
+		PositionAnimator centerAnimator = new PositionAnimator(
+			new ScheduledInterpolator(timeToMove),
+			beginCenterPos, endCenterPos,
+			OrbitViewPropertyAccessor.createCenterPositionAccessor(orbitView));
+		
+		/**
+		 * Аниматор поворота камеры
+		 */
+        AngleAnimator headingAnimator = new AngleAnimator(
+            new ScheduledInterpolator(timeToMove),
+            beginHeading, endHeading,
+            OrbitViewPropertyAccessor.createHeadingAccessor(orbitView));
         
-        panAnimator.setAnimators(filtered);
         /**
+         * Аниматор наклона камеры
+         */
+        AngleAnimator pitchAnimator = new AngleAnimator(
+            new ScheduledInterpolator(timeToMove),
+            beginPitch, endPitch,
+            OrbitViewPropertyAccessor.createPitchAccessor(orbitView));
+    	
+        /**
+         * Аниматор высоты
+         */
+        ViewElevationAnimator zoomAnimator = new ViewElevationAnimator(null, beginZoom, endZoom, beginCenterPos, endCenterPos, altitudeMode, ViewPropertyAccessor.createElevationAccessor(orbitView));
+        
+        /**
+         * Суммарный аниматор
+         */
+        FlyToOrbitViewAnimator panAnimator = new FlyToOrbitViewAnimator(orbitView,
+            new ScheduledInterpolator(timeToMove), altitudeMode, centerAnimator,
+            zoomAnimator, headingAnimator, pitchAnimator, null);
+    	
+    	/**
          * Добавляем аниматор к виду
          */
         wwd.getView().getViewInputHandler().addAnimator(panAnimator);
         wwd.getView().firePropertyChange(AVKey.VIEW, null, wwd.getView());
     }
+       
         
     public void hideAnnotation(){
 		/**
@@ -425,6 +496,7 @@ public class ViewScene {
     	 */
     	aw = new AutoWatcher(ViewScene.this, index, index-1);
     	aw.start();
+    	cp.animationStarted();
     }
     
     /**
@@ -451,6 +523,7 @@ public class ViewScene {
         	 */
         	aw = new AutoWatcher(ViewScene.this, index, next);
         	aw.start();
+        	cp.animationStarted();
         	index++;
     	}    	
     }
@@ -478,6 +551,7 @@ public class ViewScene {
 			 * Запускаем автопросмотр
 			 */
 			aw.start();
+			cp.animationStarted();
 		}	
     }
     
@@ -490,6 +564,7 @@ public class ViewScene {
     		index = aw.getIndex();
     		showFirstSlide(index);
     		aw = null;
+    		cp.animationStopped();
     	}
     }
 	public Shell getShell() {

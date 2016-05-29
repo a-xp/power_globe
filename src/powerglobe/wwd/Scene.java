@@ -43,6 +43,7 @@ import powerglobe.view.SlideImage;
 public class Scene {
 	
 	public WorldWindowGLCanvas wwd;
+	public Panel panel;
 	
 	/**
 	 *  Очередь слайдов на генерацию скриншота
@@ -275,6 +276,7 @@ public class Scene {
 	}
 
 	public Scene(Panel panel) {
+		this.panel = panel;
 		wwd = new WorldWindowGLCanvas();
 		wwd.setModel(new BasicModel());
 		panel.add(wwd, java.awt.BorderLayout.CENTER);
